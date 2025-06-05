@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pix2Pix: Interactive Image-to-Image Translation Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
+        }
+        .canvas-container {
+            border: 2px dashed #d1d5db; /* Tailwind gray-300 */
+            border-radius: 0.5rem; /* Tailwind rounded-lg */
+            background-color: #e5e7eb; /* Tailwind gray-200 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 256px; /* Ensure a minimum height */
+            position: relative;
+        }
+        .canvas-placeholder {
+            color: #6b7280; /* Tailwind gray-500 */
+            text-align: center;
+        }
+        canvas {
+            max-width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            border-radius: 0.375rem; /* Tailwind rounded-md */
+        }
+        .info-card {
+            background-color: white;
+            border-radius: 0.75rem; /* Tailwind rounded-xl */
+            padding: 1.5rem; /* Tailwind p-6 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* Tailwind shadow-lg */
+            margin-bottom: 1.5rem; /* Tailwind mb-6 */
+        }
+        .info-card h3 {
+            font-size: 1.25rem; /* Tailwind text-xl */
+            font-weight: 600; /* Tailwind font-semibold */
+            color: #1f2937; /* Tailwind gray-800 */
+            margin-bottom: 0.75rem; /* Tailwind mb-3 */
+        }
+        .info-card p, .info-card ul {
+            color: #4b5563; /* Tailwind gray-600 */
+            line-height: 1.6;
+        }
+        .info-card li {
+            margin-bottom: 0.25rem;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: background-color 0.3s ease;
+        }
+        .btn-primary {
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb; /* Tailwind blue-600 */
+        }
+        .select-style {
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db; /* Tailwind gray-300 */
+            background-color: white;
+        }
+        #loadingIndicator {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            z-index: 1000;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-5xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Pix2Pix: Image-to-Image Translation</h1>
+            <p class="text-lg text-gray-600 mt-2">Conceptual Demonstration</p>
+        </header>
+
+        <div class="info-card">
+            <p class="text-sm text-amber-700 bg-amber-100 p-3 rounded-md">
+                <strong>Note:</strong> This is a simplified, interactive demonstration using basic image filters.
+                A real Pix2Pix model uses complex deep neural networks (Generator and Discriminator) trained on large datasets
+                to learn sophisticated image-to-image translations. The filters below are for illustrative purposes only.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 items-end">
+            <div>
+                <label for="imageUpload" class="block text-sm font-medium text-gray-700 mb-1">Upload Image:</label>
+                <input type="file" id="imageUpload" accept="image/*" class="w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100
+                "/>
+            </div>
+            <div>
+                <label for="translationType" class="block text-sm font-medium text-gray-700 mb-1">Simulated Translation:</label>
+                <select id="translationType" class="select-style w-full">
+                    <option value="grayscale">Grayscale (e.g., Color to B&W)</option>
+                    <option value="invert">Invert Colors (e.g., Photo to Negative)</option>
+                    <option value="sepia">Sepia Tone (e.g., Vintage Effect)</option>
+                    <option value="sketch">Basic Sketch (e.g., Photo to Edges)</option>
+                    <option value="pixelate">Pixelate (e.g., Photo to Mosaic)</option>
+                </select>
+            </div>
+            <button id="translateButton" class="btn btn-primary w-full md:w-auto">Apply "Translation"</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="canvas-container" id="inputContainer">
+                <canvas id="inputCanvas"></canvas>
+                <div id="inputPlaceholder" class="canvas-placeholder">Upload an image to see it here.</div>
+            </div>
+            <div class="canvas-container" id="outputContainer">
+                <canvas id="outputCanvas"></canvas>
+                <div id="outputPlaceholder" class="canvas-placeholder">"Translated" image will appear here.</div>
+            </div>
+        </div>
+        
+        <div id="loadingIndicator">Processing...</div>
+
+        <div class="space-y-6">
+            <div class="info-card">
+                <h3>What is Pix2Pix?</h3>
+                <p>Pix2Pix is a type of Conditional Generative Adversarial Network (cGAN) designed for image-to-image translation tasks. This means it learns to map an input image to a corresponding output image. Examples include:</p>
+                <ul class="list-disc list-inside ml-4 mt-2">
+                    <li>Converting satellite photos to map routes.</li>
+                    <li>Turning black and white images into color images.</li>
+                    <li>Transforming sketches into photorealistic images.</li>
+                    <li>Changing day scenes to night scenes.</li>
+                </ul>
+                <p class="mt-2">It achieves this by training two neural networks simultaneously: a Generator and a Discriminator.</p>
+            </div>
+
+            <div class="info-card">
+                <h3>The Generator (U-Net Architecture)</h3>
+                <p>The Generator's job is to take an input image and produce the translated output image. In Pix2Pix, the generator often uses a <strong>U-Net architecture</strong>:</p>
+                <ul class="list-disc list-inside ml-4 mt-2">
+                    <li><strong>Encoder-Decoder Structure:</strong> The U-Net first downsamples (encodes) the input image to capture high-level contextual information, then upsamples (decodes) it to produce the full-resolution output image.</li>
+                    <li><strong>Skip Connections:</strong> A key feature of U-Net is skip connections that directly link layers in the encoder to corresponding layers in the decoder. These connections allow low-level information (like edges and textures) from the input to be passed to the output, helping to generate sharper and more detailed results. This is crucial for preserving structural similarity between the input and output.</li>
+                </ul>
+                <p class="mt-2">The generator is trained to produce images that not only look realistic but are also plausible translations of the input, according to the learned mapping from the training data.</p>
+            </div>
+
+            <div class="info-card">
+                <h3>The Discriminator (PatchGAN Architecture)</h3>
+                <p>The Discriminator acts as a critic. Its role is to distinguish between a "real" pair (input image, actual target output image from the dataset) and a "fake" pair (input image, generator's output image).</p>
+                <ul class="list-disc list-inside ml-4 mt-2">
+                    <li><strong>PatchGAN:</strong> Instead of classifying the entire image as real or fake, the Pix2Pix discriminator often uses a PatchGAN. It looks at N x N patches of the image and classifies each patch as real or fake. This encourages the generator to produce realistic details across the entire image.</li>
+                    <li><strong>Conditional Input:</strong> The discriminator receives both the input image and either the target image (real) or the generated image (fake). This "conditioning" on the input image helps it learn if the output is a plausible translation of that specific input.</li>
+                </ul>
+                <p class="mt-2">The discriminator is trained to become better at telling real from fake, while the generator is trained to fool the discriminator.</p>
+            </div>
+
+            <div class="info-card">
+                <h3>Training Process</h3>
+                <p>Training a Pix2Pix model involves an adversarial process:</p>
+                <ol class="list-decimal list-inside ml-4 mt-2">
+                    <li><strong>Discriminator Training:</strong> The discriminator is shown real input-output pairs and fake input-generated_output pairs. It learns to maximize its accuracy in distinguishing them.</li>
+                    <li><strong>Generator Training:</strong> The generator produces an output image. This output is fed to the discriminator. The generator's goal is to produce an image that the discriminator classifies as "real".</li>
+                </ol>
+                <p class="mt-2">Two main types of loss functions guide the training:</p>
+                <ul class="list-disc list-inside ml-4 mt-2">
+                    <li><strong>Adversarial Loss:</strong> Encourages the generator to produce images that are indistinguishable from real images (as judged by the discriminator).</li>
+                    <li><strong>Reconstruction Loss (e.g., L1 Loss):</strong> Encourages the generator to produce images that are structurally similar to the ground truth target images. L1 loss (mean absolute error between pixels) is often preferred as it tends to produce less blurry results than L2 loss.</li>
+                </ul>
+                <p class="mt-2">These two networks are trained iteratively, pushing each other to improve, until the generator can produce high-quality translations.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const inputCanvas = document.getElementById('inputCanvas');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const inputCtx = inputCanvas.getContext('2d');
+        const outputCtx = outputCanvas.getContext('2d');
+        const translationTypeSelect = document.getElementById('translationType');
+        const translateButton = document.getElementById('translateButton');
+        const inputPlaceholder = document.getElementById('inputPlaceholder');
+        const outputPlaceholder = document.getElementById('outputPlaceholder');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        let originalImage = null;
+        const MAX_WIDTH = 512; // Max width for canvas display
+        const MAX_HEIGHT = 512; // Max height for canvas display
+
+        imageUpload.addEventListener('change', handleImageUpload);
+        translateButton.addEventListener('click', applySimulatedTranslation);
+
+        function showLoading(show) {
+            loadingIndicator.style.display = show ? 'block' : 'none';
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    originalImage = new Image();
+                    originalImage.onload = function() {
+                        // Resize image for canvas display
+                        let width = originalImage.width;
+                        let height = originalImage.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+                        inputCanvas.width = width;
+                        inputCanvas.height = height;
+                        inputCtx.drawImage(originalImage, 0, 0, width, height);
+                        inputPlaceholder.style.display = 'none';
+                        outputPlaceholder.style.display = 'block'; // Show placeholder for output
+                        outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height); // Clear previous output
+                        outputCanvas.width = 0; // Hide output canvas until translation
+                        outputCanvas.height = 0;
+                    }
+                    originalImage.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function applySimulatedTranslation() {
+            if (!originalImage) {
+                alert('Please upload an image first.'); // Replace with a nicer modal if possible
+                return;
+            }
+            showLoading(true);
+
+            // Use a timeout to allow the loading indicator to render before heavy processing
+            setTimeout(() => {
+                const translationType = translationTypeSelect.value;
+                
+                // Set output canvas size same as input
+                outputCanvas.width = inputCanvas.width;
+                outputCanvas.height = inputCanvas.height;
+                outputCtx.drawImage(inputCanvas, 0, 0, inputCanvas.width, inputCanvas.height); // Draw original to output first
+                
+                const imageData = outputCtx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+                const data = imageData.data;
+
+                switch (translationType) {
+                    case 'grayscale':
+                        applyGrayscale(data);
+                        break;
+                    case 'invert':
+                        applyInvert(data);
+                        break;
+                    case 'sepia':
+                        applySepia(data);
+                        break;
+                    case 'sketch':
+                        applySketch(data, outputCanvas.width, outputCanvas.height);
+                        break;
+                    case 'pixelate':
+                        applyPixelate(data, outputCanvas.width, outputCanvas.height, 10); // 10px block size
+                        break;
+                }
+
+                outputCtx.putImageData(imageData, 0, 0);
+                outputPlaceholder.style.display = 'none';
+                showLoading(false);
+            }, 50); // Small delay
+        }
+
+        function applyGrayscale(data) {
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                data[i] = avg;     // red
+                data[i + 1] = avg; // green
+                data[i + 2] = avg; // blue
+            }
+        }
+
+        function applyInvert(data) {
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = 255 - data[i];     // red
+                data[i + 1] = 255 - data[i + 1]; // green
+                data[i + 2] = 255 - data[i + 2]; // blue
+            }
+        }
+
+        function applySepia(data) {
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                data[i] = Math.min(255, r * 0.393 + g * 0.769 + b * 0.189);
+                data[i + 1] = Math.min(255, r * 0.349 + g * 0.686 + b * 0.168);
+                data[i + 2] = Math.min(255, r * 0.272 + g * 0.534 + b * 0.131);
+            }
+        }
+        
+        // Basic Sketch/Edge Detection (Sobel-like simplified)
+        function applySketch(data, width, height) {
+            const grayscaleData = new Uint8ClampedArray(data.length);
+            // First, convert to grayscale and store in a temporary array
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                grayscaleData[i] = avg;
+                grayscaleData[i+1] = avg;
+                grayscaleData[i+2] = avg;
+                grayscaleData[i+3] = data[i+3]; // alpha
+            }
+
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempImageData = tempCtx.createImageData(width, height);
+            tempImageData.data.set(grayscaleData);
+            // tempCtx.putImageData(tempImageData, 0, 0); // Not needed for direct manipulation
+
+            const outputData = new Uint8ClampedArray(data.length);
+
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const i = (y * width + x) * 4;
+                    
+                    // Simplified Sobel-like operator for edges
+                    const Gx = (
+                        -grayscaleData[((y-1)*width + (x-1))*4] + grayscaleData[((y-1)*width + (x+1))*4] +
+                        -2*grayscaleData[(y*width + (x-1))*4]   + 2*grayscaleData[(y*width + (x+1))*4] +
+                        -grayscaleData[((y+1)*width + (x-1))*4] + grayscaleData[((y+1)*width + (x+1))*4]
+                    );
+
+                    const Gy = (
+                        -grayscaleData[((y-1)*width + (x-1))*4] - 2*grayscaleData[((y-1)*width + x)*4] - grayscaleData[((y-1)*width + (x+1))*4] +
+                         grayscaleData[((y+1)*width + (x-1))*4] + 2*grayscaleData[((y+1)*width + x)*4] + grayscaleData[((y+1)*width + (x+1))*4]
+                    );
+
+                    const magnitude = Math.sqrt(Gx*Gx + Gy*Gy);
+                    const edgeColor = magnitude > 100 ? 0 : 255; // Threshold for edge, invert for white paper black sketch
+
+                    outputData[i] = edgeColor;
+                    outputData[i+1] = edgeColor;
+                    outputData[i+2] = edgeColor;
+                    outputData[i+3] = 255; // Alpha
+                }
+            }
+            // Copy result back to original data array
+            for(let i=0; i < data.length; i++) {
+                data[i] = outputData[i];
+            }
+        }
+
+        function applyPixelate(data, width, height, blockSize) {
+            if (blockSize <= 0) blockSize = 1;
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            
+            // Draw the original image onto a temporary canvas to easily get pixel block averages
+            const originalImageData = tempCtx.createImageData(width, height);
+            originalImageData.data.set(data);
+            tempCtx.putImageData(originalImageData, 0, 0);
+
+            for (let y = 0; y < height; y += blockSize) {
+                for (let x = 0; x < width; x += blockSize) {
+                    const actualBlockWidth = Math.min(blockSize, width - x);
+                    const actualBlockHeight = Math.min(blockSize, height - y);
+                    
+                    // Get average color of the block from the temp canvas
+                    const blockImageData = tempCtx.getImageData(x, y, actualBlockWidth, actualBlockHeight);
+                    const blockData = blockImageData.data;
+                    let r = 0, g = 0, b = 0, a = 0;
+                    let count = 0;
+
+                    for (let i = 0; i < blockData.length; i += 4) {
+                        r += blockData[i];
+                        g += blockData[i+1];
+                        b += blockData[i+2];
+                        a += blockData[i+3];
+                        count++;
+                    }
+
+                    const avgR = r / count;
+                    const avgG = g / count;
+                    const avgB = b / count;
+                    const avgA = a / count;
+
+                    // Apply this average color to the corresponding block in the output data
+                    for (let by = y; by < y + actualBlockHeight; by++) {
+                        for (let bx = x; bx < x + actualBlockWidth; bx++) {
+                            const i = (by * width + bx) * 4;
+                            data[i] = avgR;
+                            data[i+1] = avgG;
+                            data[i+2] = avgB;
+                            data[i+3] = avgA;
+                        }
+                    }
+                }
+            }
+        }
+
+    </script>
+</body>
+</html>
